@@ -1,4 +1,6 @@
 """Tests for SAJ config flow."""
+from unittest.mock import Mock, patch
+
 import pysaj
 import pytest
 
@@ -11,8 +13,6 @@ from homeassistant.const import (
     CONF_TYPE,
     CONF_USERNAME,
 )
-
-from tests.async_mock import Mock, patch
 
 MOCK_USER_DATA = {
     CONF_HOST: "fake_host",
