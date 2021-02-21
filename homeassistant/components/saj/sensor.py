@@ -1,5 +1,4 @@
 """SAJ solar inverter interface."""
-import asyncio
 from datetime import date
 import logging
 
@@ -31,7 +30,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_call_later
 
-from .const import DOMAIN, INVERTER_TYPES
+from .const import DEFAULT_NAME, DOMAIN, INVERTER_TYPES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,14 +61,20 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities
 ):
-    """Set up for SAJ inverters."""
-    await async_setup_platform(hass, entry.data, async_add_entities)
+    """Set up the SAJ sensors."""
+    inverter = SAJInverter(entry.data)
+    await inverter.connect()
+    inverter.setup(hass, async_add_entities)
 
 
 async def async_setup_platform(
     hass: HomeAssistant, config, async_add_entities, discovery_info=None
 ):
-    """Set up the SAJ sensors."""
+    """Set up the SAJ inverter with yaml."""
+    _LOGGER.warning(
+        "Loading SAJ Solar inverter integration via yaml is deprecated."
+        "Please remove it from your configuration."
+    )
     inverter = SAJInverter(config)
     await inverter.connect()
     inverter.setup(hass, async_add_entities)
@@ -95,8 +100,14 @@ class SAJInverter:
 
         self._hass = None
         self._hass_sensors = []
+        self._available = False
         self._interval = MIN_INTERVAL
         self._stop_interval = None
+
+    @property
+    def available(self) -> bool:
+        """Return True if device is available."""
+        return self._available
 
     @property
     def name(self):
@@ -168,17 +179,26 @@ class SAJInverter:
             self._stop_interval = None
 
     async def _interval_listener(self, _):
+        new_available = False
         try:
             if await self.update():
+                new_available = True
+        finally:
+            if new_available:
                 self._interval = MIN_INTERVAL
             else:
                 self._interval = min(self._interval * 2, MAX_INTERVAL)
-        except asyncio.TimeoutError:
-            _LOGGER.debug("Update timeout")
-        finally:
-            self._stop_interval = async_call_later(
-                self._hass, self._interval, self._interval_listener
-            )
+            if new_available != self._available:
+                _LOGGER.debug(
+                    "[%s] availability changed: %s",
+                    self._name or DEFAULT_NAME,
+                    new_available,
+                )
+                self._available = new_available
+                for sensor in self._hass_sensors:
+                    sensor.schedule_update_ha_state()
+
+            self.start_update_interval(None)
 
 
 class SAJSensor(Entity):
@@ -260,6 +280,11 @@ class SAJSensor(Entity):
             self.async_write_ha_state()
 
     @property
+    def available(self) -> bool:
+        """Return True if device is available."""
+        return self._inverter.available
+
+    @property
     def unique_id(self):
         """Return a unique identifier for this sensor."""
         return f"{self._inverter.serialnumber}_{self._sensor.name}"
@@ -272,7 +297,7 @@ class SAJSensor(Entity):
                 # Serial numbers are unique identifiers within a specific domain
                 (DOMAIN, self._inverter.serialnumber)
             },
-            "name": self._inverter.name or "SAJ Solar inverter",
+            "name": self._inverter.name or DEFAULT_NAME,
             "manufacturer": "SAJ",
         }
 
