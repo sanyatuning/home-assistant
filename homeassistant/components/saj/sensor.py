@@ -72,7 +72,7 @@ async def async_setup_platform(
 ):
     """Set up the SAJ inverter with yaml."""
     _LOGGER.warning(
-        "Loading SAJ Solar inverter integration via yaml is deprecated."
+        "Loading SAJ Solar inverter integration via yaml is deprecated. "
         "Please remove it from your configuration."
     )
     inverter = SAJInverter(config)
