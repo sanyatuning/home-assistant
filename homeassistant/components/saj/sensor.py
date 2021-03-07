@@ -1,6 +1,7 @@
 """SAJ solar inverter interface."""
 from datetime import date
 import logging
+from typing import Callable
 
 import pysaj
 import voluptuous as vol
@@ -30,7 +31,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_call_later
 
-from .const import DEFAULT_NAME, DOMAIN, INVERTER_TYPES
+from .const import DEFAULT_NAME, DOMAIN, ENABLED_SENSORS, INVERTER_TYPES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,16 +60,15 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: Callable
 ):
     """Set up the SAJ sensors."""
     inverter = SAJInverter(entry.data)
-    await inverter.connect()
     inverter.setup(hass, async_add_entities)
 
 
 async def async_setup_platform(
-    hass: HomeAssistant, config, async_add_entities, discovery_info=None
+    hass: HomeAssistant, config, async_add_entities: Callable, discovery_info=None
 ):
     """Set up the SAJ inverter with yaml."""
     _LOGGER.warning(
@@ -97,12 +97,19 @@ class SAJInverter:
 
         self._saj = pysaj.SAJ(config[CONF_HOST], **kwargs)
         self._sensor_def = pysaj.Sensors(self._wifi)
+        if ENABLED_SENSORS in config:
+            for sensor in self._sensor_def:
+                sensor.enabled = sensor.key in config[ENABLED_SENSORS]
 
         self._hass = None
         self._hass_sensors = []
         self._available = False
         self._interval = MIN_INTERVAL
         self._stop_interval = None
+
+    def get_enabled_sensors(self):
+        """Return enabled sensors keys."""
+        return [s.key for s in self._sensor_def if s.enabled]
 
     @property
     def available(self) -> bool:
@@ -112,7 +119,7 @@ class SAJInverter:
     @property
     def name(self):
         """Return the name of the inverter."""
-        return self._name
+        return self._name or DEFAULT_NAME
 
     @property
     def serialnumber(self):
@@ -127,7 +134,7 @@ class SAJInverter:
 
         raise CannotConnect
 
-    def setup(self, hass, async_add_entities):
+    def setup(self, hass, async_add_entities: Callable):
         """Add sensors to Core and start update loop."""
         self._hass = hass
         for sensor in self._sensor_def:
@@ -191,7 +198,7 @@ class SAJInverter:
             if new_available != self._available:
                 _LOGGER.debug(
                     "[%s] availability changed: %s",
-                    self._name or DEFAULT_NAME,
+                    self.name,
                     new_available,
                 )
                 self._available = new_available
@@ -204,7 +211,7 @@ class SAJInverter:
 class SAJSensor(Entity):
     """Representation of a SAJ sensor."""
 
-    def __init__(self, inverter: SAJInverter, pysaj_sensor):
+    def __init__(self, inverter: SAJInverter, pysaj_sensor: pysaj.Sensor):
         """Initialize the SAJ sensor."""
         self._inverter = inverter
         self._sensor = pysaj_sensor
@@ -217,7 +224,7 @@ class SAJSensor(Entity):
     @property
     def name(self):
         """Return the name of the sensor."""
-        if self._inverter.name:
+        if self._inverter.name != DEFAULT_NAME:
             return f"saj_{self._inverter.name}_{self._sensor.name}"
 
         return f"saj_{self._sensor.name}"
@@ -282,6 +289,8 @@ class SAJSensor(Entity):
     @property
     def available(self) -> bool:
         """Return True if device is available."""
+        if self._sensor.name != "state":
+            return True
         return self._inverter.available
 
     @property
@@ -297,7 +306,7 @@ class SAJSensor(Entity):
                 # Serial numbers are unique identifiers within a specific domain
                 (DOMAIN, self._inverter.serialnumber)
             },
-            "name": self._inverter.name or DEFAULT_NAME,
+            "name": self._inverter.name,
             "manufacturer": "SAJ",
         }
 

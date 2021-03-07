@@ -4,7 +4,7 @@ import logging
 import pysaj
 import voluptuous as vol
 
-from homeassistant import config_entries
+from homeassistant import config_entries, data_entry_flow
 from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
@@ -13,7 +13,11 @@ from homeassistant.const import (
     CONF_USERNAME,
 )
 
-from .const import DOMAIN, INVERTER_TYPES  # pylint:disable=unused-import
+from .const import (  # pylint:disable=unused-import
+    DOMAIN,
+    ENABLED_SENSORS,
+    INVERTER_TYPES,
+)
 from .sensor import CannotConnect, SAJInverter
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,20 +33,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors = {}
         if user_input is not None:
-            host = user_input["host"]
-
-            await self.async_set_unique_id(host)
-            self._abort_if_unique_id_configured()
-
             try:
                 inverter = SAJInverter(user_input)
                 await inverter.connect()
+                await self.async_set_unique_id(inverter.serialnumber)
+                self._abort_if_unique_id_configured()
+                user_input[ENABLED_SENSORS] = inverter.get_enabled_sensors()
 
-                return self.async_create_entry(title=host, data=user_input)
+                return self.async_create_entry(title=inverter.name, data=user_input)
             except pysaj.UnauthorizedException:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
+            except data_entry_flow.FlowError as error:
+                raise error
             except Exception as error:  # pylint: disable=broad-except
                 _LOGGER.error("Unexpected exception: %s", error)
                 errors["base"] = "unknown"
