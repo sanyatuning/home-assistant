@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 import pysaj
 import pytest
 
-from homeassistant.components.saj.const import DOMAIN
+from homeassistant.components.saj.const import DOMAIN, ENABLED_SENSORS
 from homeassistant.components.saj.sensor import CannotConnect
 from homeassistant.const import (
     CONF_HOST,
@@ -36,6 +36,9 @@ def remote_fixture():
                 raise err
 
         inverter.connect = mock_connect
+        inverter.get_enabled_sensors = lambda: ["a", "b"]
+        inverter.name = "mock inverter name"
+        inverter.serialnumber = "mock_serial_123"
         inverter_class.return_value = inverter
         yield inverter
 
@@ -97,10 +100,11 @@ async def test_success(hass, inverter):
     await hass.async_block_till_done()
 
     assert result["type"] == "create_entry"
-    assert result["title"] == "fake_host"
+    assert result["title"] == "mock inverter name"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_TYPE] == "wifi"
     assert result["data"][CONF_NAME] == ""
+    assert result["data"][ENABLED_SENSORS] == ["a", "b"]
 
 
 async def test_already_configured(hass, inverter):
