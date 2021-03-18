@@ -69,7 +69,7 @@ async def async_setup_entry(
 
 async def async_setup_platform(
     hass: HomeAssistant, config, async_add_entities: Callable, discovery_info=None
-):
+):  # pragma: no cover
     """Set up the SAJ inverter with yaml."""
     _LOGGER.warning(
         "Loading SAJ Solar inverter integration via yaml is deprecated. "
@@ -80,22 +80,27 @@ async def async_setup_platform(
     inverter.setup(hass, async_add_entities)
 
 
+def _init_pysaj(config):  # pragma: no cover
+    wifi = config[CONF_TYPE] == INVERTER_TYPES[1]
+    kwargs = {}
+    if wifi:
+        kwargs["wifi"] = True
+        if config.get(CONF_USERNAME) and config.get(CONF_PASSWORD):
+            kwargs["username"] = config[CONF_USERNAME]
+            kwargs["password"] = config[CONF_PASSWORD]
+
+    return pysaj.SAJ(config[CONF_HOST], **kwargs)
+
+
 class SAJInverter:
     """Representation of a SAJ inverter."""
 
-    def __init__(self, config):
+    def __init__(self, config, saj=None):
         """Init SAJ Inverter class."""
         self._name = config.get(CONF_NAME)
         self._wifi = config[CONF_TYPE] == INVERTER_TYPES[1]
 
-        kwargs = {}
-        if self._wifi:
-            kwargs["wifi"] = True
-            if config.get(CONF_USERNAME) and config.get(CONF_PASSWORD):
-                kwargs["username"] = config[CONF_USERNAME]
-                kwargs["password"] = config[CONF_PASSWORD]
-
-        self._saj = pysaj.SAJ(config[CONF_HOST], **kwargs)
+        self._saj = saj or _init_pysaj(config)
         self._sensor_def = pysaj.Sensors(self._wifi)
         if ENABLED_SENSORS in config:
             for sensor in self._sensor_def:
