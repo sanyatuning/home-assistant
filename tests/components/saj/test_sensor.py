@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from homeassistant.components.saj.const import ENABLED_SENSORS
-from homeassistant.components.saj.sensor import SAJInverter
+from homeassistant.components.saj.sensor import CannotConnect, SAJInverter
+from homeassistant.core import CoreState
 
 
 @pytest.fixture
@@ -12,7 +13,7 @@ def config():
     """Return default config."""
     return {
         "type": "wifi",
-        ENABLED_SENSORS: ["p-ac", "e-total", "state"],
+        ENABLED_SENSORS: ["p-ac", "temp", "state"],
     }
 
 
@@ -35,7 +36,7 @@ def saj():
 async def test_enabled_sensors_from_config(config, saj):
     """Test enabled sensors."""
     inverter = SAJInverter(config, saj)
-    assert ["p-ac", "e-total", "state"] == inverter.get_enabled_sensors()
+    assert ["p-ac", "temp", "state"] == inverter.get_enabled_sensors()
 
 
 async def test_connect(config, saj):
@@ -43,6 +44,25 @@ async def test_connect(config, saj):
     inverter = SAJInverter(config, saj)
     await inverter.connect()
     assert ["p-ac", "state"] == inverter.get_enabled_sensors()
+
+
+async def test_cannot_connect(config, saj):
+    """Test connect raises CannotConnect."""
+    saj.read = AsyncMock()
+    saj.read.return_value = False
+    inverter = SAJInverter(config, saj)
+    with pytest.raises(CannotConnect):
+        await inverter.connect()
+
+
+def test_hass_starting(hass, config, saj):
+    """Test add callback when core is starting."""
+    hass.state = CoreState.starting
+    hass.bus.async_listen_once = Mock()
+    inverter = SAJInverter(config, saj)
+    add_fn = Mock()
+    inverter.setup(hass, add_fn)
+    hass.bus.async_listen_once.assert_called_once()
 
 
 async def test_setup_and_interval(hass, config, saj):
@@ -61,3 +81,5 @@ async def test_setup_and_interval(hass, config, saj):
     saj.read.return_value = False
     await inverter._interval_listener(None)
     assert inverter.available is False
+    for sensor in inverter._hass_sensors:
+        await sensor.async_will_remove_from_hass()
