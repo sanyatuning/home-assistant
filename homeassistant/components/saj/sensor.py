@@ -6,7 +6,7 @@ from typing import Callable
 import pysaj
 import voluptuous as vol
 
-from homeassistant.components.sensor import PLATFORM_SCHEMA
+from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_HOST,
@@ -28,7 +28,6 @@ from homeassistant.const import (
 from homeassistant.core import CoreState, HomeAssistant, callback
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_call_later
 
 from .const import DEFAULT_NAME, DOMAIN, ENABLED_SENSORS, INVERTER_TYPES
@@ -162,18 +161,18 @@ class SAJInverter:
 
         for sensor in self._hass_sensors:
             state_unknown = False
-            if not values:
-                # SAJ inverters are powered by DC via solar panels and thus are
-                # offline after the sun has set. If a sensor resets on a daily
-                # basis like "today_yield", this reset won't happen automatically.
-                # Code below checks if today > day when sensor was last updated
-                # and if so: set state to None.
-                # Sensors with live values like "temperature" or "current_power"
-                # will also be reset to None.
-                if (sensor.per_day_basis and date.today() > sensor.date_updated) or (
-                    not sensor.per_day_basis and not sensor.per_total_basis
-                ):
-                    state_unknown = True
+            # SAJ inverters are powered by DC via solar panels and thus are
+            # offline after the sun has set. If a sensor resets on a daily
+            # basis like "today_yield", this reset won't happen automatically.
+            # Code below checks if today > day when sensor was last updated
+            # and if so: set state to None.
+            # Sensors with live values like "temperature" or "current_power"
+            # will also be reset to None.
+            if not values and (
+                (sensor.per_day_basis and date.today() > sensor.date_updated)
+                or (not sensor.per_day_basis and not sensor.per_total_basis)
+            ):
+                state_unknown = True
             sensor.async_update_values(unknown_state=state_unknown)
 
         return values
@@ -213,7 +212,7 @@ class SAJInverter:
             self.start_update_interval(None)
 
 
-class SAJSensor(Entity):
+class SAJSensor(SensorEntity):
     """Representation of a SAJ sensor."""
 
     def __init__(self, inverter: SAJInverter, pysaj_sensor: pysaj.Sensor):
