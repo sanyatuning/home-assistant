@@ -10,9 +10,12 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
     CONF_PASSWORD,
+    CONF_SCAN_INTERVAL,
     CONF_TYPE,
     CONF_USERNAME,
 )
+
+from tests.common import MockConfigEntry
 
 MOCK_USER_DATA = {
     CONF_HOST: "fake_host",
@@ -124,3 +127,23 @@ async def test_already_configured(hass, inverter):
 
     assert result["type"] == "abort"
     assert result["reason"] == "already_configured"
+
+
+async def test_option_flow(hass):
+    """Test config flow options."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=None)
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_SCAN_INTERVAL: 5},
+    )
+    assert result["type"] == "create_entry"
+    assert result["data"] == {
+        CONF_SCAN_INTERVAL: 5,
+    }

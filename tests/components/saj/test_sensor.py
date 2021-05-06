@@ -1,5 +1,4 @@
 """Tests for SAJ sensor."""
-import asyncio
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -76,7 +75,7 @@ async def test_setup_and_interval(hass: HomeAssistant, config, saj):
             sensor.hass = hass
 
     inverter.setup(hass, add_fn)
-    await asyncio.sleep(0)
+    await hass.async_block_till_done()
     assert inverter.available
     saj.read = AsyncMock()
     saj.read.return_value = False
