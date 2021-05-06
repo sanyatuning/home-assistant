@@ -12,6 +12,7 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
     CONF_PASSWORD,
+    CONF_SCAN_INTERVAL,
     CONF_TYPE,
     CONF_USERNAME,
     DEVICE_CLASS_POWER,
@@ -30,13 +31,16 @@ from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_call_later
 
-from .const import DEFAULT_NAME, DOMAIN, ENABLED_SENSORS, INVERTER_TYPES
+from .const import (
+    DEFAULT_NAME,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    ENABLED_SENSORS,
+    INVERTER_TYPES,
+    MAX_SCAN_INTERVAL,
+)
 
 _LOGGER = logging.getLogger(__name__)
-
-# seconds
-MIN_INTERVAL = 30
-MAX_INTERVAL = 900
 
 SAJ_UNIT_MAPPINGS = {
     "": None,
@@ -51,6 +55,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Optional(CONF_NAME): cv.string,
+        vol.Optional(CONF_SCAN_INTERVAL): cv.positive_int,
         vol.Optional(CONF_TYPE, default=INVERTER_TYPES[0]): vol.In(INVERTER_TYPES),
         vol.Inclusive(CONF_USERNAME, "credentials"): cv.string,
         vol.Inclusive(CONF_PASSWORD, "credentials"): cv.string,
@@ -62,7 +67,9 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: Callable
 ):
     """Set up the SAJ sensors."""
-    inverter = SAJInverter(entry.data)
+    config = entry.data.copy()
+    config.update(entry.options)
+    inverter = SAJInverter(config)
     inverter.setup(hass, async_add_entities)
 
 
@@ -108,7 +115,8 @@ class SAJInverter:
         self._hass = None
         self._hass_sensors = []
         self._available = False
-        self._interval = MIN_INTERVAL
+        self._default_interval = config.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        self._interval = self._default_interval
         self._stop_interval = None
 
     def get_enabled_sensors(self):
@@ -148,10 +156,10 @@ class SAJInverter:
         async_add_entities(self._hass_sensors)
 
         if self._hass.state == CoreState.running:
-            self.start_update_interval(None)
+            self._hass.async_run_job(self._interval_listener, None)
         else:
             self._hass.bus.async_listen_once(
-                EVENT_HOMEASSISTANT_STARTED, self.start_update_interval
+                EVENT_HOMEASSISTANT_STARTED, self._interval_listener
             )
         self._hass.bus.async_listen(EVENT_HOMEASSISTANT_STOP, self.stop_update_interval)
 
@@ -177,12 +185,6 @@ class SAJInverter:
 
         return values
 
-    def start_update_interval(self, _):
-        """Start the update interval scheduling."""
-        self._stop_interval = async_call_later(
-            self._hass, self._interval, self._interval_listener
-        )
-
     def stop_update_interval(self, _):
         """Properly cancel the scheduled update."""
         if self._stop_interval:
@@ -196,9 +198,9 @@ class SAJInverter:
                 new_available = True
         finally:
             if new_available:
-                self._interval = MIN_INTERVAL
+                self._interval = self._default_interval
             else:
-                self._interval = min(self._interval * 2, MAX_INTERVAL)
+                self._interval = min(self._interval * 2, MAX_SCAN_INTERVAL)
             if new_available != self._available:
                 _LOGGER.debug(
                     "[%s] availability changed: %s",
@@ -209,7 +211,9 @@ class SAJInverter:
                 for sensor in self._hass_sensors:
                     sensor.schedule_update_ha_state()
 
-            self.start_update_interval(None)
+            self._stop_interval = async_call_later(
+                self._hass, self._interval, self._interval_listener
+            )
 
 
 class SAJSensor(SensorEntity):

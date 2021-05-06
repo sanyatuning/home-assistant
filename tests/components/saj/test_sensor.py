@@ -1,11 +1,12 @@
 """Tests for SAJ sensor."""
+import asyncio
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from homeassistant.components.saj.const import ENABLED_SENSORS
 from homeassistant.components.saj.sensor import CannotConnect, SAJInverter
-from homeassistant.core import CoreState
+from homeassistant.core import CoreState, HomeAssistant
 
 
 @pytest.fixture
@@ -65,7 +66,7 @@ def test_hass_starting(hass, config, saj):
     hass.bus.async_listen_once.assert_called_once()
 
 
-async def test_setup_and_interval(hass, config, saj):
+async def test_setup_and_interval(hass: HomeAssistant, config, saj):
     """Test setup and update interval."""
     inverter = SAJInverter(config, saj)
 
@@ -75,7 +76,7 @@ async def test_setup_and_interval(hass, config, saj):
             sensor.hass = hass
 
     inverter.setup(hass, add_fn)
-    await inverter._interval_listener(None)
+    await asyncio.sleep(0)
     assert inverter.available
     saj.read = AsyncMock()
     saj.read.return_value = False
