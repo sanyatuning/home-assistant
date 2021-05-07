@@ -87,13 +87,10 @@ async def async_setup_platform(
 
 
 def _init_pysaj(config):  # pragma: no cover
-    wifi = config[CONF_TYPE] == INVERTER_TYPES[1]
-    kwargs = {}
-    if wifi:
-        kwargs["wifi"] = True
-        if config.get(CONF_USERNAME) and config.get(CONF_PASSWORD):
-            kwargs["username"] = config[CONF_USERNAME]
-            kwargs["password"] = config[CONF_PASSWORD]
+    kwargs = {"wifi": config[CONF_TYPE] == INVERTER_TYPES[1]}
+    if config.get(CONF_USERNAME) and config.get(CONF_PASSWORD):
+        kwargs["username"] = config[CONF_USERNAME]
+        kwargs["password"] = config[CONF_PASSWORD]
 
     return pysaj.SAJ(config[CONF_HOST], **kwargs)
 
