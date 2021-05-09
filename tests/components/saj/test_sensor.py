@@ -5,7 +5,7 @@ import pytest
 
 from homeassistant.components.saj.const import ENABLED_SENSORS
 from homeassistant.components.saj.sensor import CannotConnect, SAJInverter
-from homeassistant.core import CoreState, HomeAssistant
+from homeassistant.core import HomeAssistant
 
 
 @pytest.fixture
@@ -33,53 +33,43 @@ def saj():
     return mock
 
 
-async def test_enabled_sensors_from_config(config, saj):
+async def test_enabled_sensors_from_config(hass, config, saj):
     """Test enabled sensors."""
-    inverter = SAJInverter(config, saj)
+    inverter = SAJInverter(hass, config, saj)
     assert ["p-ac", "temp", "state"] == inverter.get_enabled_sensors()
 
 
-async def test_connect(config, saj):
+async def test_connect(hass, config, saj):
     """Test connect calls mocked read."""
-    inverter = SAJInverter(config, saj)
+    inverter = SAJInverter(hass, config, saj)
     await inverter.connect()
     assert ["p-ac", "state"] == inverter.get_enabled_sensors()
 
 
-async def test_cannot_connect(config, saj):
+async def test_cannot_connect(hass, config, saj):
     """Test connect raises CannotConnect."""
     saj.read = AsyncMock()
     saj.read.return_value = False
-    inverter = SAJInverter(config, saj)
+    inverter = SAJInverter(hass, config, saj)
     with pytest.raises(CannotConnect):
         await inverter.connect()
 
 
-def test_hass_starting(hass, config, saj):
-    """Test add callback when core is starting."""
-    hass.state = CoreState.starting
-    hass.bus.async_listen_once = Mock()
-    inverter = SAJInverter(config, saj)
+async def test_add_sensors(hass, config, saj):
+    """Test add entities on setup."""
+    inverter = SAJInverter(hass, config, saj)
     add_fn = Mock()
-    inverter.setup(hass, add_fn)
-    hass.bus.async_listen_once.assert_called_once()
+    await inverter.setup(add_fn)
+    add_fn.assert_called()
 
 
-async def test_setup_and_interval(hass: HomeAssistant, config, saj):
-    """Test setup and update interval."""
-    inverter = SAJInverter(config, saj)
-
-    def add_fn(hass_sensors):
-        for sensor in hass_sensors:
-            sensor.entity_id = "sensor." + sensor.name
-            sensor.hass = hass
-
-    inverter.setup(hass, add_fn)
-    await hass.async_block_till_done()
+async def test_available(hass: HomeAssistant, config, saj):
+    """Test available."""
+    inverter = SAJInverter(hass, config, saj)
+    add_fn = Mock()
+    await inverter.setup(add_fn)
     assert inverter.available
     saj.read = AsyncMock()
     saj.read.return_value = False
-    await inverter._interval_listener(None)
+    await inverter.coordinator.async_refresh()
     assert inverter.available is False
-    for sensor in inverter._hass_sensors:
-        await sensor.async_will_remove_from_hass()
