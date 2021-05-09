@@ -33,41 +33,41 @@ def saj():
     return mock
 
 
-async def test_enabled_sensors_from_config(hass, config, saj):
+async def test_enabled_sensors_from_config(config, saj):
     """Test enabled sensors."""
-    inverter = SAJInverter(hass, config, saj)
+    inverter = SAJInverter(config, saj)
     assert ["p-ac", "temp", "state"] == inverter.get_enabled_sensors()
 
 
-async def test_connect(hass, config, saj):
+async def test_connect(config, saj):
     """Test connect calls mocked read."""
-    inverter = SAJInverter(hass, config, saj)
+    inverter = SAJInverter(config, saj)
     await inverter.connect()
     assert ["p-ac", "state"] == inverter.get_enabled_sensors()
 
 
-async def test_cannot_connect(hass, config, saj):
+async def test_cannot_connect(config, saj):
     """Test connect raises CannotConnect."""
     saj.read = AsyncMock()
     saj.read.return_value = False
-    inverter = SAJInverter(hass, config, saj)
+    inverter = SAJInverter(config, saj)
     with pytest.raises(CannotConnect):
         await inverter.connect()
 
 
 async def test_add_sensors(hass, config, saj):
     """Test add entities on setup."""
-    inverter = SAJInverter(hass, config, saj)
+    inverter = SAJInverter(config, saj)
     add_fn = Mock()
-    await inverter.setup(add_fn)
+    await inverter.setup(hass, add_fn)
     add_fn.assert_called()
 
 
 async def test_available(hass: HomeAssistant, config, saj):
     """Test available."""
-    inverter = SAJInverter(hass, config, saj)
+    inverter = SAJInverter(config, saj)
     add_fn = Mock()
-    await inverter.setup(add_fn)
+    await inverter.setup(hass, add_fn)
     assert inverter.available
     saj.read = AsyncMock()
     saj.read.return_value = False

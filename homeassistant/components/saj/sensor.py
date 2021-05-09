@@ -70,8 +70,8 @@ async def async_setup_entry(
     """Set up the SAJ sensors."""
     config = entry.data.copy()
     config.update(entry.options)
-    inverter = SAJInverter(hass, config)
-    await inverter.setup(async_add_entities)
+    inverter = SAJInverter(config)
+    await inverter.setup(hass, async_add_entities)
 
 
 async def async_setup_platform(
@@ -82,8 +82,8 @@ async def async_setup_platform(
         "Loading SAJ Solar inverter integration via yaml is deprecated. "
         "Please remove it from your configuration"
     )
-    inverter = SAJInverter(hass, config)
-    await inverter.setup(async_add_entities)
+    inverter = SAJInverter(config)
+    await inverter.setup(hass, async_add_entities)
 
 
 def _init_pysaj(wifi, config):  # pragma: no cover
@@ -98,8 +98,9 @@ def _init_pysaj(wifi, config):  # pragma: no cover
 class SAJInverter:
     """Representation of a SAJ inverter."""
 
-    def __init__(self, hass, config, saj=None):
+    def __init__(self, config, saj=None):
         """Init SAJ Inverter class."""
+        self._name = config.get(CONF_NAME)
         wifi = config[CONF_TYPE] == INVERTER_TYPES[1]
 
         self._saj = saj or _init_pysaj(wifi, config)
@@ -108,15 +109,8 @@ class SAJInverter:
             for sensor in self._sensor_def:
                 sensor.enabled = sensor.key in config[ENABLED_SENSORS]
 
-        scan_interval = config.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-
-        self.coordinator = DataUpdateCoordinator(
-            hass,
-            _LOGGER,
-            name=config.get(CONF_NAME, DEFAULT_NAME),
-            update_method=self.update,
-            update_interval=timedelta(seconds=scan_interval),
-        )
+        self.coordinator = None
+        self._interval = config.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
     def get_enabled_sensors(self):
         """Return enabled sensors keys."""
@@ -125,7 +119,12 @@ class SAJInverter:
     @property
     def available(self) -> bool:
         """Return True if device is available."""
-        return self.coordinator.last_update_success
+        return self.coordinator and self.coordinator.last_update_success
+
+    @property
+    def name(self):
+        """Return the name of the inverter."""
+        return self._name or DEFAULT_NAME
 
     @property
     def serialnumber(self):
@@ -140,8 +139,15 @@ class SAJInverter:
 
         raise CannotConnect
 
-    async def setup(self, async_add_entities: Callable):
+    async def setup(self, hass, async_add_entities: Callable):
         """Add sensors to Core and get first state."""
+        self.coordinator = DataUpdateCoordinator(
+            hass,
+            _LOGGER,
+            name=self.name,
+            update_method=self.update,
+            update_interval=timedelta(seconds=self._interval),
+        )
         await self.coordinator.async_refresh()
 
         async_add_entities(
@@ -153,7 +159,8 @@ class SAJInverter:
         done = await self._saj.read(self._sensor_def)
         if done:
             return self._sensor_def
-        raise UpdateFailed()
+
+        raise UpdateFailed
 
 
 class SAJSensor(CoordinatorEntity, SensorEntity):
@@ -168,15 +175,15 @@ class SAJSensor(CoordinatorEntity, SensorEntity):
     @property
     def name(self):
         """Return the name of the sensor."""
-        if self.coordinator.name != DEFAULT_NAME:
-            return f"saj_{self.coordinator.name}_{self._sensor.name}"
+        if self._inverter.name != DEFAULT_NAME:
+            return f"saj_{self._inverter.name}_{self._sensor.name}"
 
         return f"saj_{self._sensor.name}"
 
     @property
     def state(self):
         """Return the state of the sensor."""
-        if not self.coordinator.last_update_success:
+        if not self._inverter.available:
             # SAJ inverters are powered by DC via solar panels and thus are
             # offline after the sun has set. If a sensor resets on a daily
             # basis like "today_yield", this reset won't happen automatically.
@@ -192,6 +199,13 @@ class SAJSensor(CoordinatorEntity, SensorEntity):
                 return None
 
         return self._sensor.value
+
+    @property
+    def available(self) -> bool:
+        """Return True if device is available."""
+        if self._sensor.name != "state":
+            return True
+        return super().available
 
     @property
     def unit_of_measurement(self):
@@ -210,13 +224,6 @@ class SAJSensor(CoordinatorEntity, SensorEntity):
             return DEVICE_CLASS_TEMPERATURE
 
     @property
-    def available(self) -> bool:
-        """Return True if device is available."""
-        if self._sensor.name != "state":
-            return True
-        return super().available
-
-    @property
     def unique_id(self):
         """Return a unique identifier for this sensor."""
         return f"{self._inverter.serialnumber}_{self._sensor.name}"
@@ -229,7 +236,7 @@ class SAJSensor(CoordinatorEntity, SensorEntity):
                 # Serial numbers are unique identifiers within a specific domain
                 (DOMAIN, self._inverter.serialnumber)
             },
-            "name": self.coordinator.name,
+            "name": self._inverter.name,
             "manufacturer": "SAJ",
         }
 
