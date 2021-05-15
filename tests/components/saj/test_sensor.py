@@ -1,10 +1,11 @@
 """Tests for SAJ sensor."""
 from unittest.mock import AsyncMock, Mock
 
+import pysaj
 import pytest
 
 from homeassistant.components.saj.const import ENABLED_SENSORS
-from homeassistant.components.saj.sensor import CannotConnect, SAJInverter
+from homeassistant.components.saj.sensor import CannotConnect, SAJInverter, SAJSensor
 from homeassistant.core import HomeAssistant
 
 
@@ -30,6 +31,7 @@ def saj():
 
     mock = Mock()
     mock.read = mock_read
+    mock.serialnumber = "123456789"
     return mock
 
 
@@ -73,3 +75,16 @@ async def test_available(hass: HomeAssistant, config, saj):
     saj.read.return_value = False
     await inverter.coordinator.async_refresh()
     assert inverter.available is False
+
+
+async def test_sensor(config, saj):
+    """Test sensor class."""
+    inverter = SAJInverter(config, saj)
+    pysaj_sensor = pysaj.Sensor("p-ac", 11, 23, "", "current_power", "W")
+    sensor = SAJSensor(inverter, pysaj_sensor)
+    assert "saj_current_power" == sensor.name
+    assert sensor.state is None
+    assert sensor.available
+    assert "W" == sensor.unit_of_measurement
+    assert "power" == sensor.device_class
+    assert "123456789_current_power" == sensor.unique_id
