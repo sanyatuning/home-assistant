@@ -7,6 +7,7 @@ import voluptuous as vol
 from homeassistant import config_entries, data_entry_flow
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_NAME,
     CONF_PASSWORD,
@@ -51,6 +52,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(inverter.serialnumber)
                 self._abort_if_unique_id_configured()
                 user_input[ENABLED_SENSORS] = inverter.get_enabled_sensors()
+                user_input[CONF_DEVICE_ID] = inverter.serialnumber
 
                 return self.async_create_entry(title=inverter.name, data=user_input)
             except pysaj.UnauthorizedException:

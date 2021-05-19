@@ -9,6 +9,7 @@ import voluptuous as vol
 from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_NAME,
     CONF_PASSWORD,
@@ -105,6 +106,8 @@ class SAJInverter:
 
         self._saj = saj or _init_pysaj(wifi, config)
         self._sensor_def = pysaj.Sensors(wifi)
+        if CONF_DEVICE_ID in config:
+            self._saj.serialnumber = config[CONF_DEVICE_ID]
         if ENABLED_SENSORS in config:
             for sensor in self._sensor_def:
                 sensor.enabled = sensor.key in config[ENABLED_SENSORS]
