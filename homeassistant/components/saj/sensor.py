@@ -173,7 +173,7 @@ class SAJInverter:
 class SAJSensor(CoordinatorEntity, SensorEntity):
     """Representation of a SAJ sensor."""
 
-    def __init__(self, inverter: SAJInverter, pysaj_sensor: pysaj.Sensor):
+    def __init__(self, inverter: SAJInverter, pysaj_sensor: pysaj.Sensor) -> None:
         """Initialize the SAJ sensor."""
         super().__init__(inverter.coordinator)
         self._inverter = inverter
