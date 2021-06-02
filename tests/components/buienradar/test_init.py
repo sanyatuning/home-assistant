@@ -1,8 +1,9 @@
 """Tests for the buienradar component."""
 from unittest.mock import patch
 
-from homeassistant.components.buienradar import async_setup
+from homeassistant import setup
 from homeassistant.components.buienradar.const import DOMAIN
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.helpers.entity_registry import async_get_registry
 
@@ -30,7 +31,7 @@ async def test_import_all(hass):
     with patch(
         "homeassistant.components.buienradar.async_setup_entry", return_value=True
     ):
-        await async_setup(hass, config)
+        await setup.async_setup_component(hass, DOMAIN, config)
         await hass.async_block_till_done()
 
     conf_entries = hass.config_entries.async_entries(DOMAIN)
@@ -39,7 +40,7 @@ async def test_import_all(hass):
 
     entry = conf_entries[0]
 
-    assert entry.state == "loaded"
+    assert entry.state is ConfigEntryState.LOADED
     assert entry.data == {
         "latitude": hass.config.latitude,
         "longitude": hass.config.longitude,
@@ -68,7 +69,7 @@ async def test_import_camera(hass):
     with patch(
         "homeassistant.components.buienradar.async_setup_entry", return_value=True
     ):
-        await async_setup(hass, config)
+        await setup.async_setup_component(hass, DOMAIN, config)
         await hass.async_block_till_done()
 
     conf_entries = hass.config_entries.async_entries(DOMAIN)
@@ -77,7 +78,7 @@ async def test_import_camera(hass):
 
     entry = conf_entries[0]
 
-    assert entry.state == "loaded"
+    assert entry.state is ConfigEntryState.LOADED
     assert entry.data == {
         "latitude": hass.config.latitude,
         "longitude": hass.config.longitude,
@@ -97,7 +98,7 @@ async def test_import_camera(hass):
     assert entity.original_name == "test_name"
 
 
-async def test_load_unload(hass):
+async def test_load_unload(aioclient_mock, hass):
     """Test options flow."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -112,9 +113,9 @@ async def test_load_unload(hass):
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.state == "loaded"
+    assert entry.state is ConfigEntryState.LOADED
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.state == "not_loaded"
+    assert entry.state is ConfigEntryState.NOT_LOADED
