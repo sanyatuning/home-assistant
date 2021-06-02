@@ -7,3 +7,6 @@ MAX_SCAN_INTERVAL = 900
 DOMAIN = "saj"
 ENABLED_SENSORS = "enabled_sensors"
 INVERTER_TYPES = ["ethernet", "wifi"]
+
+DATA_INVERTER = "inverter"
+DATA_UNDO_UPDATE_LISTENER = "undo_update_listener"

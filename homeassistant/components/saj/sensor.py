@@ -35,6 +35,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import (
+    DATA_INVERTER,
     DEFAULT_NAME,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -69,9 +70,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: Callable
 ):
     """Set up the SAJ sensors."""
-    config = entry.data.copy()
-    config.update(entry.options)
-    inverter = SAJInverter(config)
+    inverter: SAJInverter = hass.data[DOMAIN][entry.entry_id][DATA_INVERTER]
     await inverter.setup(hass, async_add_entities)
 
 
@@ -157,6 +156,11 @@ class SAJInverter:
             SAJSensor(self, sensor) for sensor in self._sensor_def if sensor.enabled
         )
 
+    def update_options(self, options):
+        """Update inverter with new config options."""
+        self._interval = options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        self.coordinator.update_interval = timedelta(seconds=self._interval)
+
     async def update(self):
         """Fetch data from Inverter."""
         done = await self._saj.read(self._sensor_def)
@@ -179,9 +183,9 @@ class SAJSensor(CoordinatorEntity, SensorEntity):
     def name(self):
         """Return the name of the sensor."""
         if self._inverter.name != DEFAULT_NAME:
-            return f"saj_{self._inverter.name}_{self._sensor.name}"
+            return f"{self._inverter.name} {self._sensor.name}"
 
-        return f"saj_{self._sensor.name}"
+        return f"SAJ Inverter {self._sensor.name}"
 
     @property
     def state(self):

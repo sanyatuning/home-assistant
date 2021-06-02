@@ -1,4 +1,5 @@
 """Tests for SAJ sensor."""
+from datetime import timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pysaj
@@ -6,6 +7,7 @@ import pytest
 
 from homeassistant.components.saj.const import ENABLED_SENSORS
 from homeassistant.components.saj.sensor import CannotConnect, SAJInverter, SAJSensor
+from homeassistant.const import CONF_NAME, CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant
 
 
@@ -82,9 +84,38 @@ async def test_sensor(config, saj):
     inverter = SAJInverter(config, saj)
     pysaj_sensor = pysaj.Sensor("p-ac", 11, 23, "", "current_power", "W")
     sensor = SAJSensor(inverter, pysaj_sensor)
-    assert "saj_current_power" == sensor.name
+    assert "SAJ Inverter current_power" == sensor.name
     assert sensor.state is None
     assert sensor.available
     assert "W" == sensor.unit_of_measurement
     assert "power" == sensor.device_class
     assert "123456789_current_power" == sensor.unique_id
+    assert {
+        "identifiers": {("saj", "123456789")},
+        "name": "SAJ Solar inverter",
+        "manufacturer": "SAJ",
+    } == sensor.device_info
+
+
+async def test_sensor_temp(config, saj):
+    """Test sensor class."""
+    config[CONF_NAME] = "Second inverter"
+    inverter = SAJInverter(config, saj)
+    pysaj_sensor = pysaj.Sensor("temp", 20, 32, "/10", "temperature", "°C")
+    sensor = SAJSensor(inverter, pysaj_sensor)
+    assert "Second inverter temperature" == sensor.name
+    assert "°C" == sensor.unit_of_measurement
+    assert "temperature" == sensor.device_class
+
+
+async def test_update_options(hass: HomeAssistant, config, saj):
+    """Test update options."""
+    inverter = SAJInverter(config, saj)
+    add_fn = Mock()
+    await inverter.setup(hass, add_fn)
+    inverter.update_options(
+        {
+            CONF_SCAN_INTERVAL: 5,
+        }
+    )
+    assert timedelta(seconds=5) == inverter.coordinator.update_interval
