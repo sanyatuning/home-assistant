@@ -1,7 +1,7 @@
 """SAJ solar inverter interface."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 import logging
 from typing import Callable
 
@@ -13,13 +13,11 @@ from homeassistant.components.sensor import (
     STATE_CLASS_MEASUREMENT,
     SensorEntity,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import (
-    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_NAME,
     CONF_PASSWORD,
-    CONF_SCAN_INTERVAL,
     CONF_TYPE,
     CONF_USERNAME,
     DEVICE_CLASS_POWER,
@@ -32,7 +30,7 @@ from homeassistant.const import (
     TIME_HOURS,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import PlatformNotReady
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -41,14 +39,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    DATA_INVERTER,
-    DEFAULT_NAME,
-    DEFAULT_SCAN_INTERVAL,
-    DOMAIN,
-    ENABLED_SENSORS,
-    INVERTER_TYPES,
-)
+from .const import DEFAULT_NAME, DOMAIN, INVERTER_TYPES, UPDATE_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +56,6 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Optional(CONF_NAME): cv.string,
-        vol.Optional(CONF_SCAN_INTERVAL): cv.positive_int,
         vol.Optional(CONF_TYPE, default=INVERTER_TYPES[0]): vol.In(INVERTER_TYPES),
         vol.Inclusive(CONF_USERNAME, "credentials"): cv.string,
         vol.Inclusive(CONF_PASSWORD, "credentials"): cv.string,
@@ -75,9 +65,9 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: Callable
-):
+):  # pragma: no cover
     """Set up the SAJ sensors."""
-    inverter: SAJInverter = hass.data[DOMAIN][entry.entry_id][DATA_INVERTER]
+    inverter: SAJInverter = hass.data[DOMAIN][entry.entry_id]
     await inverter.setup(hass, async_add_entities)
 
 
@@ -89,37 +79,36 @@ async def async_setup_platform(
         "Loading SAJ Solar inverter integration via yaml is deprecated. "
         "Please remove it from your configuration"
     )
-    inverter = SAJInverter(config)
-    await inverter.setup(hass, async_add_entities)
+    hass.async_create_task(
+        hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_IMPORT},
+            data=config,
+        )
+    )
 
 
-def _init_pysaj(wifi, config):  # pragma: no cover
+def _init_pysaj(wifi, host, username, password):  # pragma: no cover
     kwargs = {"wifi": wifi}
-    if config.get(CONF_USERNAME) and config.get(CONF_PASSWORD):
-        kwargs["username"] = config[CONF_USERNAME]
-        kwargs["password"] = config[CONF_PASSWORD]
+    if username and password:
+        kwargs["username"] = username
+        kwargs["password"] = password
 
-    return pysaj.SAJ(config[CONF_HOST], **kwargs)
+    return pysaj.SAJ(host, **kwargs)
 
 
 class SAJInverter:
     """Representation of a SAJ inverter."""
 
-    def __init__(self, config, saj=None):
+    def __init__(
+        self, name="", wifi=True, host=None, username=None, password=None, saj=None
+    ):
         """Init SAJ Inverter class."""
-        self._name = config.get(CONF_NAME)
-        wifi = config[CONF_TYPE] == INVERTER_TYPES[1]
-
-        self._saj = saj or _init_pysaj(wifi, config)
+        self._name = name
+        self._saj = saj or _init_pysaj(wifi, host, username, password)
         self._sensor_def = pysaj.Sensors(wifi)
-        if CONF_DEVICE_ID in config:
-            self._saj.serialnumber = config[CONF_DEVICE_ID]
-        if ENABLED_SENSORS in config:
-            for sensor in self._sensor_def:
-                sensor.enabled = sensor.key in config[ENABLED_SENSORS]
 
         self.coordinator = None
-        self._interval = config.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
     def get_enabled_sensors(self):
         """Return enabled sensors keys."""
@@ -155,18 +144,13 @@ class SAJInverter:
             _LOGGER,
             name=self.name,
             update_method=self.update,
-            update_interval=timedelta(seconds=self._interval),
+            update_interval=UPDATE_INTERVAL,
         )
         await self.coordinator.async_refresh()
 
         async_add_entities(
             SAJSensor(self, sensor) for sensor in self._sensor_def if sensor.enabled
         )
-
-    def update_options(self, options):
-        """Update inverter with new config options."""
-        self._interval = options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-        self.coordinator.update_interval = timedelta(seconds=self._interval)
 
     async def update(self):
         """Fetch data from Inverter."""
@@ -260,5 +244,5 @@ class SAJSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class CannotConnect(PlatformNotReady):
+class CannotConnect(ConfigEntryNotReady):
     """Error to indicate we cannot connect."""

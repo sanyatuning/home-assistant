@@ -1,31 +1,33 @@
 """The saj component."""
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_TYPE,
+    CONF_USERNAME,
+)
 from homeassistant.core import HomeAssistant
 
-from .const import DATA_INVERTER, DATA_UNDO_UPDATE_LISTENER, DOMAIN
+from .const import DOMAIN, INVERTER_TYPES
 from .sensor import SAJInverter
 
 PLATFORMS = ["sensor"]
 
 
-async def async_setup(hass: HomeAssistant, config: dict):
-    """Set up the saj component."""
-    return True
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up saj from a config entry."""
-
-    config = entry.data.copy()
-    config.update(entry.options)
-    inverter = SAJInverter(config)
-    undo_listener = entry.add_update_listener(update_listener)
+    inverter = SAJInverter(
+        entry.data.get(CONF_NAME),
+        entry.data.get(CONF_TYPE) == INVERTER_TYPES[1],
+        entry.data.get(CONF_HOST),
+        entry.data.get(CONF_USERNAME),
+        entry.data.get(CONF_PASSWORD),
+    )
+    await inverter.connect()
 
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {
-        DATA_INVERTER: inverter,
-        DATA_UNDO_UPDATE_LISTENER: undo_listener,
-    }
+    hass.data[DOMAIN][entry.entry_id] = inverter
 
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
@@ -35,15 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
     if unload_ok:
-        hass.data[DOMAIN][entry.entry_id][DATA_UNDO_UPDATE_LISTENER]()
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
-
-
-async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
-    """Handle options update."""
-    inverter: SAJInverter = hass.data[DOMAIN][entry.entry_id][DATA_INVERTER]
-    inverter.update_options(entry.options)

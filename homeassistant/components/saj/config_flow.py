@@ -5,26 +5,15 @@ import pysaj
 import voluptuous as vol
 
 from homeassistant import config_entries, data_entry_flow
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_NAME,
     CONF_PASSWORD,
-    CONF_SCAN_INTERVAL,
     CONF_TYPE,
     CONF_USERNAME,
 )
-from homeassistant.core import callback
 
-from .const import (  # pylint:disable=unused-import
-    DEFAULT_SCAN_INTERVAL,
-    DOMAIN,
-    ENABLED_SENSORS,
-    INVERTER_TYPES,
-    MAX_SCAN_INTERVAL,
-    MIN_SCAN_INTERVAL,
-)
+from .const import DOMAIN, INVERTER_TYPES
 from .sensor import CannotConnect, SAJInverter
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,25 +23,29 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for SAJ."""
 
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry: ConfigEntry):
-        """Define the config flow to handle options."""
-        return OptionsFlowHandler(config_entry)
+    async def async_step_import(self, import_config) -> data_entry_flow.FlowResult:
+        """Import a config entry from configuration.yaml."""
+        for entry in self._async_current_entries(include_ignore=True):
+            if import_config[CONF_HOST] == entry.data[CONF_HOST]:
+                return self.async_abort(reason="already_configured")
+        return await self.async_step_user(import_config)
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input=None) -> data_entry_flow.FlowResult:
         """Handle the initial step."""
         errors = {}
         if user_input is not None:
             try:
-                inverter = SAJInverter(user_input)
+                inverter = SAJInverter(
+                    user_input.get(CONF_NAME),
+                    user_input.get(CONF_TYPE) == INVERTER_TYPES[1],
+                    user_input.get(CONF_HOST),
+                    user_input.get(CONF_USERNAME),
+                    user_input.get(CONF_PASSWORD),
+                )
                 await inverter.connect()
                 await self.async_set_unique_id(inverter.serialnumber)
                 self._abort_if_unique_id_configured()
-                user_input[ENABLED_SENSORS] = inverter.get_enabled_sensors()
-                user_input[CONF_DEVICE_ID] = inverter.serialnumber
 
                 return self.async_create_entry(title=inverter.name, data=user_input)
             except pysaj.UnauthorizedException:
@@ -89,37 +82,4 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
-        )
-
-
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input=None):
-        """Manage options."""
-
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=(
-                vol.Schema(
-                    {
-                        vol.Optional(
-                            CONF_SCAN_INTERVAL,
-                            default=self.config_entry.options.get(
-                                CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-                            ),
-                        ): vol.All(
-                            vol.Coerce(int),
-                            vol.Clamp(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
-                        ),
-                    }
-                )
-            ),
         )
