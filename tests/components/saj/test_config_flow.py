@@ -5,7 +5,7 @@ import pysaj
 import pytest
 
 from homeassistant.components.saj.const import DOMAIN
-from homeassistant.components.saj.sensor import CannotConnect
+from homeassistant.components.saj.coordinator import CannotConnect
 from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
@@ -26,7 +26,9 @@ MOCK_USER_DATA = {
 def remote_fixture():
     """Patch the SAJInverter."""
 
-    with patch("homeassistant.components.saj.sensor.SAJInverter") as inverter_class:
+    with patch(
+        "homeassistant.components.saj.coordinator.SAJInverter"
+    ) as inverter_class:
         inverter = Mock()
 
         async def mock_connect():

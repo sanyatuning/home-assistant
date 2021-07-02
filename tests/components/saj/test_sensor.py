@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, Mock
 import pysaj
 import pytest
 
-from homeassistant.components.saj.sensor import CannotConnect, SAJInverter, SAJSensor
+from homeassistant.components.saj.coordinator import CannotConnect, SAJInverter
+from homeassistant.components.saj.sensor import SAJSensor
 from homeassistant.core import HomeAssistant
 
 
@@ -54,11 +55,11 @@ async def test_available(hass: HomeAssistant, saj):
     inverter = SAJInverter(saj=saj)
     add_fn = Mock()
     await inverter.setup(hass, add_fn)
-    assert inverter.available
+    assert inverter.last_update_success
     saj.read = AsyncMock()
     saj.read.return_value = False
-    await inverter.coordinator.async_refresh()
-    assert inverter.available is False
+    await inverter.async_refresh()
+    assert inverter.last_update_success is False
 
 
 async def test_sensor(saj):

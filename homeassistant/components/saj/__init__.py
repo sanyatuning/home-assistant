@@ -10,7 +10,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, INVERTER_TYPES
-from .sensor import SAJInverter
+from .coordinator import SAJInverter
 
 PLATFORMS = ["sensor"]
 

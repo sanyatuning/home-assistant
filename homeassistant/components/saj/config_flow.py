@@ -14,7 +14,7 @@ from homeassistant.const import (
 )
 
 from .const import DOMAIN, INVERTER_TYPES
-from .sensor import CannotConnect, SAJInverter
+from .coordinator import CannotConnect, SAJInverter
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +24,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_import(self, import_config) -> data_entry_flow.FlowResult:
+    async def async_step_import(
+        self, import_config
+    ) -> data_entry_flow.FlowResult:  # pragma: no cover
         """Import a config entry from configuration.yaml."""
         for entry in self._async_current_entries(include_ignore=True):
             if import_config[CONF_HOST] == entry.data[CONF_HOST]:
