@@ -39,6 +39,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 inverter = SAJInverter(
+                    self.hass,
                     user_input.get(CONF_NAME),
                     user_input.get(CONF_TYPE) == INVERTER_TYPES[1],
                     user_input.get(CONF_HOST),

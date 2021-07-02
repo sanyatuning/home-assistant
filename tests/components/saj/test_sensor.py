@@ -26,35 +26,35 @@ def saj():
     return mock
 
 
-async def test_connect(saj):
+async def test_connect(hass, saj):
     """Test connect calls mocked read."""
-    inverter = SAJInverter(saj=saj)
+    inverter = SAJInverter(hass, saj=saj)
     await inverter.connect()
     assert inverter.get_enabled_sensors() == ["p-ac", "state"]
 
 
-async def test_cannot_connect(saj):
+async def test_cannot_connect(hass, saj):
     """Test connect raises CannotConnect."""
     saj.read = AsyncMock()
     saj.read.return_value = False
-    inverter = SAJInverter(saj=saj)
+    inverter = SAJInverter(hass, saj=saj)
     with pytest.raises(CannotConnect):
         await inverter.connect()
 
 
 async def test_add_sensors(hass, saj):
     """Test add entities on setup."""
-    inverter = SAJInverter(saj=saj)
+    inverter = SAJInverter(hass, saj=saj)
     add_fn = Mock()
-    await inverter.setup(hass, add_fn)
+    await inverter.setup(add_fn)
     add_fn.assert_called()
 
 
 async def test_available(hass: HomeAssistant, saj):
     """Test available."""
-    inverter = SAJInverter(saj=saj)
+    inverter = SAJInverter(hass, saj=saj)
     add_fn = Mock()
-    await inverter.setup(hass, add_fn)
+    await inverter.setup(add_fn)
     assert inverter.last_update_success
     saj.read = AsyncMock()
     saj.read.return_value = False
@@ -62,9 +62,9 @@ async def test_available(hass: HomeAssistant, saj):
     assert inverter.last_update_success is False
 
 
-async def test_sensor(saj):
+async def test_sensor(hass, saj):
     """Test sensor class."""
-    inverter = SAJInverter(saj=saj)
+    inverter = SAJInverter(hass, saj=saj)
     pysaj_sensor = pysaj.Sensor("p-ac", 11, 23, "", "current_power", "W")
     sensor = SAJSensor(inverter, pysaj_sensor)
     assert sensor.name == "SAJ Inverter current_power"
@@ -80,9 +80,9 @@ async def test_sensor(saj):
     }
 
 
-async def test_sensor_temp(saj):
+async def test_sensor_temp(hass, saj):
     """Test sensor class."""
-    inverter = SAJInverter("Second inverter", saj=saj)
+    inverter = SAJInverter(hass, "Second inverter", saj=saj)
     pysaj_sensor = pysaj.Sensor("temp", 20, 32, "/10", "temperature", "°C")
     sensor = SAJSensor(inverter, pysaj_sensor)
     assert sensor.name == "Second inverter temperature"

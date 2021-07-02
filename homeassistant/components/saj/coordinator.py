@@ -4,9 +4,10 @@ from typing import Callable
 
 import pysaj
 
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from ...exceptions import ConfigEntryNotReady
 from .const import DEFAULT_NAME, UPDATE_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,11 +26,18 @@ class SAJInverter(DataUpdateCoordinator):
     """Representation of a SAJ inverter."""
 
     def __init__(
-        self, name="", wifi=True, host=None, username=None, password=None, saj=None
+        self,
+        hass: HomeAssistant,
+        name="",
+        wifi=True,
+        host=None,
+        username=None,
+        password=None,
+        saj=None,
     ):
         """Init SAJ Inverter class."""
         super().__init__(
-            None,
+            hass,
             _LOGGER,
             name=name or DEFAULT_NAME,
             update_interval=UPDATE_INTERVAL,
@@ -56,13 +64,12 @@ class SAJInverter(DataUpdateCoordinator):
 
         raise CannotConnect
 
-    async def setup(self, hass, async_add_entities: Callable):
+    async def setup(self, async_add_entities: Callable):
         """Add sensors to Core and get first state."""
+        # pylint: disable=import-outside-toplevel
         from .sensor import SAJSensor
 
-        self.hass = hass
         await self.async_refresh()
-
         async_add_entities(
             SAJSensor(self, sensor) for sensor in self._sensor_def if sensor.enabled
         )

@@ -18,6 +18,7 @@ PLATFORMS = ["sensor"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up saj from a config entry."""
     inverter = SAJInverter(
+        hass,
         entry.data.get(CONF_NAME),
         entry.data.get(CONF_TYPE) == INVERTER_TYPES[1],
         entry.data.get(CONF_HOST),

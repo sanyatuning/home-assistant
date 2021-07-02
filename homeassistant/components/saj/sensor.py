@@ -64,7 +64,7 @@ async def async_setup_entry(
 ):  # pragma: no cover
     """Set up the SAJ sensors."""
     inverter: SAJInverter = hass.data[DOMAIN][entry.entry_id]
-    await inverter.setup(hass, async_add_entities)
+    await inverter.setup(async_add_entities)
 
 
 async def async_setup_platform(
